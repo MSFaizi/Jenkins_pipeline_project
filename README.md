@@ -113,3 +113,40 @@ name: stop container shell: docker container stop webaap
 name: remove container shell: docker container rm webaap
 name: remove docker image shell: docker image rmi raoshahzaib/webaap
 name: create new container shell: docker container run -itd --name webaap -p 9000:80 raoshahzaib/webaap
+
+
+#Pipeline Script
+
+node{
+    stage('Git Checkout'){
+        git branch: 'main', url: 'https://github.com/MSFaizi/Jenkins_pipeline_project.git'
+    }
+    
+    stage('Docker Build Image'){
+        sh ' docker image build -t $JOB_NAME:v1.$BUILD_ID .'
+        sh 'docker image tag $JOB_NAME:v1.$BUILD_ID shamimfaizi/$JOB_NAME:v1.$BUILD_ID'
+        sh 'docker image tag $JOB_NAME:v1.$BUILD_ID shamimfaizi/$JOB_NAME:latest'
+    }
+    
+    stage('Docker Push Image'){
+        withCredentials([string(credentialsId: 'dockerpass', variable: 'dockerPass')]) {
+        sh "docker login -u shamimfaizi -p ${dockerPass}"    
+        sh 'docker image push shamimfaizi/$JOB_NAME:v1.$BUILD_ID'
+        sh 'docker image push shamimfaizi/$JOB_NAME:latest'
+        sh 'docker image rm $JOB_NAME:v1.$BUILD_ID shamimfaizi/$JOB_NAME:v1.$BUILD_ID shamimfaizi/$JOB_NAME:latest'
+     
+        }
+        
+        stage('Docker Container Deploy'){
+            def docker_run = 'docker run -itd --name mywebaap -p 9000:80 shamimfaizi/webaap'
+            def docker_rmv_container = 'docker rm -f mywebaap'
+            def docker_rmvi = 'docker rmi -f mywebaap'
+            sshagent(['webapp']) {
+            sh "ssh -o StrictHostKeyChecking=no ubuntu@172.31.33.4 ${docker_rmv_container}"
+            sh "ssh -o StrictHostKeyChecking=no ubuntu@172.31.33.4 ${docker_rmvi}"
+            sh "ssh -o StrictHostKeyChecking=no ubuntu@172.31.33.4 ${docker_run}"
+       }
+    }
+    }
+  
+}
